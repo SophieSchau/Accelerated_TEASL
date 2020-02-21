@@ -1,93 +1,80 @@
-clear
-
-%% 0. Add paths and setup FesslerLibrary adds
-
-% irtdir = '/Users/jwoods/Documents/ASL/Recon/FesslerLibrary/irt/';
-% run([irtdir 'setup.m'])
-
-%% 1. Setup
-% File ID
-
-folder = '/Users/schauman/Documents/ONBI/DoctoralProject/RawData/Angio_Joe';
-
-%%%%%% Seq %%%%%
-
-% MeasFileID = [folder '/meas_MID276_jw_CAPIASL_CV_nce_angio_SEQ_LD360_9Phase_VFA_HighRes_FID328.dat'];
-% phases = 1:9; % Number of time points
-% numSpokes = 1104;
-% averages = 1;
-% TE = false;
-% encMat = [-1; 1];
+function [] = recon_adj(datafilename, R, encMat, datafolder, savefolder)
+%RECON_ADJ Recoinstructs radially acquired TE-ASL data by an adjoint operation
+%   explanation
 % 
-% R = 12;
-% acc_factor = R/2;
-% spokes(:,1) = ceil(1:R:numSpokes);
-% spokes(:,2) = ceil(R/3:R:numSpokes);
-% spokes(:,3) = ceil(2*R/3:R:numSpokes);
-% spokes(:,4) = ceil(1:R:numSpokes);
-% spokes(:,5) = ceil(R/3:R:numSpokes);
-% spokes(:,6) = ceil(2*R/3:R:numSpokes);
-% spokes(:,7) = ceil(1:R:numSpokes);
-% spokes(:,8) = ceil(R/3:R:numSpokes);
-% spokes(:,9) = ceil(2*R/3:R:numSpokes);
+%
+%
+%
+%
+
+%% 0. setup + sanity checks
+
+% Check mandatory input and set default values to others
+if nargin < 1
+    error('no data file entered')
+elseif nargin < 2
+    R = 1;
+    warning('No R provided. R is set to 1')
+elseif nargin < 3
+    encMat = 1;
+    warning('No encoding matrix provided. encMat set to 1')
+end
+
+if ~exist('datafolder', 'var')
+    datafolder = './';
+end
+
+if ~exist('savefolder', 'var')
+    savefolder = './';
+end
+
+% check formatting of provided strings
+if datafolder(end)~='/'
+    datafolder = [datafolder '/'];
+end
+
+if savefolder(end)~='/'
+    savefolder = [savefolder '/'];
+end
 
 
-% %%%%%%%% TE %%%%%%%%
+%% 1. Read in data + set up trajectory
 
-MeasFileID = [folder '/meas_MID277_jw_CAPIASL_CV_nce_angio_TE3_LD360_3Phase_VFA_highRes_FID329.dat'];
-phases = 1:3; % Number of time points
-numSpokes = 552;
-averages = 1;
-TE = true;
-% encMat = normHadamard(4,averages);
-encMat = [-1 -1 -1;...
-1  -1  1;...
--1 1  1;...
-1  1 -1];
+twix_obj = mapVBVD([datafolder, datafilename],'ignoreSeg');
+kdata_all =  twix_obj.image;
 
-R = 46;
-acc_factor = R;
-spokes(:,1) = ceil(1:R:numSpokes);
-spokes(:,2) = ceil(R/3:R:numSpokes);
-spokes(:,3) = ceil(2*R/3:R:numSpokes);
+numSpokes = twix_obj.hdr.Config.NLin;
+phases = 1:twix_obj.hdr.Config.NPhs;
+numChannels = twix_obj.hdr.Config.NChaMeas;
+numEncodings = twix_obj.hdr.Config.NAve;
+xdims = twix_obj.hdr.Config.NImageCols;
+ydims = twix_obj.hdr.Config.NImageLins;
+zdims = twix_obj.hdr.Config.NPar;
 
-%% List of acquired angles for non-golden ratio
-angles = zeros( numSpokes/R, length(phases) );
 for ph = phases
-    lineNum = spokes(:,ph)-1;
-    angles(:,ph) = pi * lineNum / (numSpokes);
+    spokes = ceil((ph-1)/length(phases)*R+1:R:numSpokes);
+    kdataframe = kdata_all(:,:,spokes,:,:,:,ph,:,:,:,:,:,:,:,:,:);
+    kdata(:,ph,:,:) = reshape(permute(kdataframe,[1,3,7,6,2,4,5]),[],1, numEncodings,numChannels);
+
+    angles = pi * (spokes-1) / (numSpokes);
     
     if mod(numSpokes,2) == 1
-        angles(:,ph) = angles(:,ph) * 2;
+        angles = angles * 2;
     end
     % figure; hold on
-    polarplot(angles(:,ph),ones(size(angles(:,ph))),'x'); hold on
-    polarplot(angles(:,ph),-ones(size(angles(:,ph))),'x'); hold off
+    polarplot(angles(:),ones(size(angles(:))),'x'); hold on
+    polarplot(angles(:),-ones(size(angles(:))),'x'); hold off
     pause(0.5)
-end
-
-%% 2. Read in data + set up trajectory
-
-
-
-for ph = phases
-    [kdataframe, kinfo] = get_K_data_standardRadial( MeasFileID, 'Spokes', spokes(:,ph), 'Phases', ph);
-    kdata(:,ph,:,:) = reshape(permute(kdataframe,[1,3,7,6,2,4,5]),[],1, size(encMat,1),32);
-end
-
-% Construct the trajectory
-for ph = phases
-    kspaceframe = gen_radial_traj(angles(:,ph),kinfo.hdr.Config.RawCol, []);
+    
+    % Construct the trajectory
+    kspaceframe = gen_radial_traj(angles(:),twix_obj.hdr.Config.RawCol, []);
     kspaceframe = [-kspaceframe(:,1) kspaceframe(:,2)];
     kspace(:,ph,:,:) = repmat(reshape(kspaceframe, [],1,1,2), 1, 1, size(encMat,1));
+    
 end
 
-% Reconstruction matrix size
-xdims = kinfo.hdr.Config.NImageCols;
-ydims = kinfo.hdr.Config.NImageLins;
-zdims = kinfo.hdr.Config.NPar;
 
-%% 3. coil sensitivity estimates
+%% 2. coil sensitivity estimates
 % Estimate sensitivity maps
 
 E0 = xfm_NUFFT_VEASL([xdims ydims zdims phases(end) 1, 1],ones([xdims ydims zdims]),[],kspace(:,:,1,:),1);
@@ -169,7 +156,7 @@ sliceThick = kinfo.hdr.MeasYaps.sSliceArray.asSlice{1}.dThickness;
 TR = kinfo.hdr.MeasYaps.alTR{1} / 1e6; % in seconds
 
 % Save in TWIX folder 
-name = ['Data/' kinfo.hdr.Dicom.tProtocolName '_offlineRecon_adj_R' num2str(acc_factor) '_nobg.mat'];
+name = ['Data/' kinfo.hdr.Dicom.tProtocolName '_offlineRecon_adj_R' num2str(R) '_nobg.mat'];
 save(name, 'imFinal')
 % % save_avw(rot90(abs(imFinal),-1),name,'d',[baseRes,baseRes,sliceThick,TR])
 % save_avw(rot90(abs(imFinal),-1),name,'d',[baseRes,baseRes,sliceThick,TR])
@@ -179,4 +166,10 @@ save(name, 'imFinal')
 % system(['fslcpgeom ' dataToCopyGeom.folder '/' dataToCopyGeom.name ' ' name ' -d'])
 
 
+
+
+
+
+
+end
 
