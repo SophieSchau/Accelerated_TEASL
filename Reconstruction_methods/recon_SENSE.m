@@ -130,7 +130,7 @@ imFinal = fista_general(kdata_pc, E, 1, 0, its, step, ...
 imFinal = reshape(imFinal(:,:,:,:,end:-1:1), size(imFinal,1), size(imFinal,2), size(imFinal,3), []);
 
 %% 6. Save
-name = [savefolder twix_obj.hdr.Dicom.tProtocolName '_offlineRecon_adj_R' num2str(R) '_nobg.mat'];
+name = [savefolder datafilename(1:end-4) '_offlineRecon_SENSE_R' num2str(R) '_nobg.mat'];
 save(name, 'imFinal')
 disp('Done')
 end
