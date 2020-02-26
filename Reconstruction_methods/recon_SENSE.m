@@ -1,11 +1,51 @@
-function [] = recon_SENSE(datafilename, encMat, R, its,step sensfile, datafolder, savefolder)
+function [] = recon_SENSE(datafilename, encMat, R, its,step, sensfile, datafolder, savefolder)
 %RECON_ADJ Recoinstructs radially acquired TE-ASL data by an adjoint operation
-%   Explanation
+%   This function reads in radially acquired time encoded ASL data from a
+%   Siemens twix file (.dat). It then keeps only every Rth spoke, uniformly
+%   distributed among the Look Locker readouts. 
+%
+%   As pre-processing, first the coil sensitivities are estimated from the
+%   retrospectively undersampled data by creating an average image friom
+%   all spokes, the phase was corrected on a line by line basis to correct
+%   for scanner drift during the scan. 
+%
+%   The reconstruction was performed using the Fast Itertive Soft
+%   Thresholding Algorithm (FISTA) that minimises the cost function 
+%           c = 0.5*norm(Ex-d,2)^2
+%   where the forward linear operator, E, contains the linear time encoding
+%   matrix, the coil sensitivity profile and the non-uniform Fourier
+%   transform. 
 % 
+%   The reconstruction is saved with the same name as the original data
+%   file + the reconstruction method and acceleration factor (R).
+%
+%   INPUTS:
+%           datafilename        string with the file name of the .dat file
+%           encMat              encoding matrix, encodings x timepoints
+%           R                   "acceleration factor" from the total number
+%                               of acquired spokes (default 1)
+%           its                 number of iterations in FISTA (default 100)
+%           step                step size used in FISTA (default 0.01)
+%           sensfile            .mat file containing sensitivity estimate.
+%                               If not provided, the sensitivity profile
+%                               will be estimated from the data, and saved
+%                               in a file with the provided name.
+%           datafolder          If the raw data is not in the current
+%                               directory the path to the file can be 
+%                               provided. (optional)
+%           savefolder          Where to save the output. Defaults to the
+%                               current directory. (optional)
+%
+%   DEPENDENCIES:
+%           The Michigan Image Reconstruction Toolbox for the NUFFT
+%           (https://web.eecs.umich.edu/~fessler/code/)
+%
+%           MapVBVD to read twix data
+%           (https://github.com/CIC-methods/FID-A/tree/master/inputOutput/mapVBVD)
 %
 %
-%
-%
+%   Sophie Schauman 2020
+%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 
 %% 0. setup + sanity checks
 % Check mandatory input and set default values to others
@@ -55,7 +95,7 @@ ydims = twix_obj.hdr.Config.NImageLins;
 zdims = twix_obj.hdr.Config.NPar;
 
 for ph = phases
-    spokes = ceil((ph-1)/length(phases)*R+1:R:numSpokes);
+    spokes = floor((ph-1)/length(phases)*R)+1:R:numSpokes;
     kdataframe = kdata_all(:,:,spokes,:,:,:,ph,:,:,:,:,:,:,:,:,:);
     kdata(:,ph,:,:) = reshape(permute(kdataframe,[1,3,7,6,2,4,5]),[],1, numEncodings,numChannels);
 
