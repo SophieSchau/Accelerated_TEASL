@@ -1,5 +1,5 @@
 # Accelerated_TEASL
-Reconstruction methods for Time Encoded Arterial Spin Labeling Angiography, as presented at ISMRM Annual Meeting 2020 in abstract #629, Highly Accelerated Time-Encoded Dynamic ASL Angiography, S Sophie Schauman, Joseph G Woods, Mark Chiew, Thomas W Okell.
+Reconstruction methods for Time Encoded Arterial Spin Labeling Angiography, as presented at ISMRM Annual Meeting 2020 in abstract #1620, Highly Accelerated Time-Encoded Dynamic ASL Angiography, S Sophie Schauman, Joseph G Woods, Mark Chiew, Thomas W Okell.
 
 ## External dependencies
 The Michigan Image Reconstruction Toolbox for the NUFFT (https://web.eecs.umich.edu/~fessler/code/)
